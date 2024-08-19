@@ -2,13 +2,14 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
 %TRAINSURROGATE   Train surrogate model.
 %   [SUPP, COEFFS, VALS, Z_TEST, ESTIMATE] = TRAINSURROGATE(SAMPLER, Z_MIN, Z_MAX, ESTIMATOR_KIND, SMAX, N_TEST, N_MEMORY, IS_SYSTEM_SELFADJOINT, VARARGIN)
 %       trains a surrogate model for high-fidelity function SAMPLER for
-%       Z_MIN <= z <= Z_MAX. An estimator of kind ESTIMATOR_KIND is used to
-%       drive the adaptive sampling in the greedy Loewner framework, and
-%       VARARGIN contains arguments needed for its initialization. At most
-%       SMAX high-fidelity samples are taken. N_TEST candidate sample
-%       points are taken. N_MEMORY memory terms are considered: the
-%       algorithm terminates successfully only if the estimator yields a
-%       "pass" at N_MEMORY successive iterations.
+%       Z_MIN <= z <= Z_MAX. Note: SAMPLER is evaluated at 1j*z. An
+%       estimator of kind ESTIMATOR_KIND is used to drive the adaptive
+%       sampling in the greedy Loewner framework, and VARARGIN contains
+%       arguments needed for its initialization. At most SMAX high-fidelity
+%       samples are taken. N_TEST candidate sample points are taken.
+%       N_MEMORY memory terms are considered: the algorithm terminates
+%       successfully only if the estimator yields a "pass" at N_MEMORY
+%       successive iterations.
     [tol, delta] = varargin{1:2};
     if strcmp(estimator_kind, "lookahead")
         estimator_kind = "lookaheadbatch";
@@ -19,6 +20,7 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
         [batch_size, seed] = varargin{3:4};
     end
     z_test = logspace(log10(z_min), log10(z_max), N_test).';
+    is_system_selfadjoint = (is_system_selfadjoint && imag(z_min) == 0 && imag(z_max) == 0);
 
     if strcmp(estimator_kind, "random") % initialize estimator
         rng(seed)

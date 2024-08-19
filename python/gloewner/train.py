@@ -24,6 +24,9 @@ def trainSurrogate(sampler, z_min, z_max, estimator,
         imaginary axis.) If True, saves half the high-fidelity samples.
     """
     z_test = list(np.geomspace(z_min, z_max, N_test))
+    is_system_selfadjoint = (is_system_selfadjoint and not np.iscomplex(z_min)
+                                                   and not np.iscomplex(z_max))
+    
     # estimator setup (only for RANDOM)
     estimator.setup(z_min, z_max)
 

@@ -1,7 +1,13 @@
 # gLoewner
 Library for greedy Loewner framework. For more details on the algorithm, see
 
-D. Pradovera, _Toward a certified greedy Loewner framework with minimal sampling_, ACOM (2023), DOI: [10.1007/s10444-023-10091-7](https://doi.org/10.1007/s10444-023-10091-7)
+> D. Pradovera, _Toward a certified greedy Loewner framework with minimal sampling_, ACOM (2023), DOI: [10.1007/s10444-023-10091-7](https://doi.org/10.1007/s10444-023-10091-7)
+
+With `gLoewner`, one can approximate arbitrary functions using rational approximants in barycentric form, given a collection of samples. The algorithm automatically selects the best locations for new samples using a greedy strategy.
+
+For convenience, the library assumes that one wishes to approximate a univariate target function `f(z)` using samples on the imaginary axis, i.e., given _real_ bounds `0<=zmin<zmax`, the method is allowed to take samples at any position of the form `1j*z` and `-1j*z`, with `zmin<=z<=zmax`. Instead, approximating `f` using _real_ samples is possible by artificially multiplying the interval bounds `zmin` and `zmax` by `-1j`.
+
+Note that, if the function `f` is self-adjoint, sampling the negative imaginary axis is easier: `f(-1j*z)=conj(f(1j*z))`. The algorithm takes advantage of this to save computational resources.
 
 ## Python install
 Prerequisites:
