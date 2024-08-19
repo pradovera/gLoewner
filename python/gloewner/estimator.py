@@ -43,6 +43,7 @@ class estimatorLookAhead(estimator):
     def post_check(self, sample, approx, *args, **kwargs):
         # error at next sample point
         self.error = self.compute_error(approx(self.z)[0], sample[:, 0])
+        logger.debug("error at z={}j is {}".format(self.z, self.error))
         return 1 * (self.error < self.tol)
 
     def build_eta(self, z_test, approx, *args, **kwargs):
@@ -70,13 +71,14 @@ class estimatorLookAheadBatch(estimator):
 
     def post_check(self, sample, approx, *args, **kwargs):
         # error at next sample point and at test points
-        logger.info("computed {} extra test samples".format(self.N - 1))
         samples = np.hstack([sample]
                           + [samplerEff(self.sampler, z) for z in self.z[1 :]]).T
+        logger.info("computed {} extra test samples".format(self.N - 1))
         error = self.compute_error(approx(self.z), samples)
         idx = np.argmax(error)
         self.error_z = self.z[idx]
         self.error = error[idx]
+        logger.debug("error at z={}j is {}".format(self.error_z, self.error))
         return 1 * (self.error < self.tol)
 
     def build_eta(self, z_test, approx, *args, **kwargs):
@@ -96,10 +98,10 @@ class estimatorRandom(estimator):
     def setup(self, z_min, z_max, *args, **kwargs):
         # compute test points and test samples
         np.random.seed(self.seed)
-        logger.info("computed {} extra test samples".format(self.N))
         self.z = 10 ** (np.log10(z_min) + (np.log10(z_max) - np.log10(z_min))
                                         * np.random.rand(self.N))
         self.samples = np.hstack([samplerEff(self.sampler, z) for z in self.z]).T
+        logger.info("computed {} extra test samples".format(self.N))
         self.samples_norm = np.linalg.norm(self.samples, axis = 1)
 
     def pre_check(self, approx, *args, **kwargs):
@@ -109,6 +111,7 @@ class estimatorRandom(estimator):
         idx = np.argmax(error)
         self.error_z = self.z[idx]
         self.error = error[idx]
+        logger.debug("error at z={}j is {}".format(self.error_z, self.error))
         return 1 * (self.error < self.tol)
 
     def build_eta(self, z_test, approx, *args, **kwargs):

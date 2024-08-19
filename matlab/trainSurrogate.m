@@ -1,6 +1,6 @@
-function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, varargin)
+function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, varargin)
 %TRAINSURROGATE   Train surrogate model.
-%   [SUPP, COEFFS, VALS, Z_TEST, ESTIMATE] = TRAINSURROGATE(SAMPLER, Z_MIN, Z_MAX, ESTIMATOR_KIND, SMAX, N_TEST, N_MEMORY, VARARGIN)
+%   [SUPP, COEFFS, VALS, Z_TEST, ESTIMATE] = TRAINSURROGATE(SAMPLER, Z_MIN, Z_MAX, ESTIMATOR_KIND, SMAX, N_TEST, N_MEMORY, IS_SYSTEM_SELFADJOINT, VARARGIN)
 %       trains a surrogate model for high-fidelity function SAMPLER for
 %       Z_MIN <= z <= Z_MAX. An estimator of kind ESTIMATOR_KIND is used to
 %       drive the adaptive sampling in the greedy Loewner framework, and
@@ -39,7 +39,14 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
     y = samplerEff(sampler, z_sample);
     fprintf("1: sampled at z=%ej\n", z_sample);
     supp = z_sample; coeffs = 1; vals = y;
-    L = .5j * (conj(y) - y) / z_sample; % Loewner matrix
+    if is_system_selfadjoint
+        yC = conj(y);
+    else
+        yC = samplerEff(sampler, -z_sample);
+        fprintf("1: sampled at z=%ej\n", -z_sample);
+    end
+    L = .5j * (yC - y) / z_sample; % Loewner matrix
+    if ~is_system_selfadjoint; valsC = yC; end
 
     % adaptivity loop
     n_memory = 0;
@@ -106,8 +113,19 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
         supp = [supp; z_sample]; vals = [vals, y];
 
         % update Loewner matrix
-        L1 = 1j * bsxfun(@rdivide, (conj(y) - vals).', z_sample + supp).';
-        l1 = conj(L1(:, 1 : end-1));
+        if is_system_selfadjoint
+            yC = conj(y);
+        else
+            yC = samplerEff(sampler, -z_sample);
+            fprintf("%d: sampled at z=%ej\n", numel(supp), -z_sample);
+        end
+        L1 = 1j * bsxfun(@rdivide, (yC - vals).', z_sample + supp).';
+        if is_system_selfadjoint
+            l1 = conj(L1(:, 1 : end-1));
+        else
+            l1 = 1j * bsxfun(@rdivide, (valsC - y).', z_sample + supp(1 : end - 1)).';
+            valsC = [valsC, yC];
+        end
         L = [L l1(:); L1];
 
         % update surrogate with new barycentric coefficients

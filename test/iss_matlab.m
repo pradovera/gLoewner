@@ -7,6 +7,7 @@ load("iss.mat", "A", "B", "C")
 problem_A = A; problem_E = speye(size(problem_A, 1));
 problem_B = full(B); problem_C = full(C);
 sampler = @(z) problem_C * ((z * problem_E - problem_A) \ problem_B);
+is_system_selfadjoint = true;
 
 z_min = 1e-1; z_max = 5e1;
 Smax = 1000; N_test = 10000; N_memory = 3;
@@ -14,17 +15,17 @@ tol = 1e-3; delta = 1e-8;
 
 % train surrogate model
 estimator_kind = "lookahead";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, tol, delta);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 % train surrogate model
 estimator_kind = "lookaheadbatch";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, tol, delta, 5);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta, 5);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 % train surrogate model
 estimator_kind = "random";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, tol, delta, 100, 42);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta, 100, 42);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 function [] = postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta)
