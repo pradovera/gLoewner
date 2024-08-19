@@ -28,5 +28,14 @@ logging.getLogger('gloewner').setLevel(logging.INFO)
 ```
 See also the test scripts named `*_python.py` in the [`test`](test) folder.
 
+## MATLAB:tm: install
+Prerequisites:
+* **matlab** (version>=R2022b)
+
+You need to add the [`matlab`](matlab) folder to the MATLAB path. From inside the folder, you can do this in MATLAB by typing
+```
+addpath(gLoewnerRoot), savepath
+```
+
 ## License
 See the [`LICENSE`](LICENSE) file for licensing information.
