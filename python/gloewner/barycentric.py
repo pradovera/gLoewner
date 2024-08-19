@@ -22,7 +22,7 @@ class barycentricFunction:
     def size(self):
         # size of output
         if self.vals is None: return self.nsupp
-        return self.vals.shape[1]
+        return self.vals.shape[0]
 
     def __call__(self, x, tol = 1e-10, only_den = False):
         # evaluate function at x (if only_den, evaluate only denominator)
@@ -40,17 +40,17 @@ class barycentricFunction:
                 elif self.vals is None:
                     bad_idx_vals += [canonical_j(idx_dx_min, self.nsupp)]
                 else:
-                    bad_idx_vals += [self.vals[idx_dx_min]]
+                    bad_idx_vals += [self.vals[:, idx_dx_min]]
         good_idxs = list(range(len(x)))
         for j in bad_idxs[::-1]: good_idxs.pop(j)
         # numerator coefficients (to be multiplied by vals)
-        num = self.coeffs / dx[good_idxs]
+        num = (self.coeffs / dx[good_idxs]).T
         if only_den:
             den = np.empty(len(x), dtype = complex)
             den[bad_idxs] = np.inf
-            den[good_idxs] = np.sum(num, axis = 1)
+            den[good_idxs] = np.sum(num, axis = 0)
             return den
-        den = np.sum(num, axis = 1)
+        den = np.sum(num, axis = 0)
         if self.vals is None:
             out = np.empty((len(x), self.nsupp), dtype = complex)
         else:
@@ -59,7 +59,7 @@ class barycentricFunction:
         for j, val in zip(bad_idxs, bad_idx_vals):
             out[j] = val
         if self.vals is None:
-            out[good_idxs] = (num.T / den).T
+            out[good_idxs] = (num / den).T
         else:
-            out[good_idxs] = (num.dot(self.vals).T / den).T
+            out[good_idxs] = (self.vals.dot(num) / den).T
         return out

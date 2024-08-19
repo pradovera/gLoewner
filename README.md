@@ -1,9 +1,7 @@
 # gLoewner
-Library for greedy Loewner framework. See
+Library for greedy Loewner framework. For more details on the algorithm, see
 
 D. Pradovera, _Toward a certified greedy Loewner framework with minimal sampling_, ACOM (2023), DOI: [10.1007/s10444-023-10091-7](https://doi.org/10.1007/s10444-023-10091-7)
-
-for more details on the algorithm.
 
 ## Python install
 Prerequisites:

@@ -3,9 +3,8 @@ from .barycentric import barycentricFunction
 from .estimator import samplerEff
 from .logging import logger
 
-# size = engine.size
 def trainSurrogate(sampler, z_min, z_max, estimator,
-                   Smax, N_test, N_memory = 1):
+                   Smax, N_test, N_memory = 1, return_estimate = True):
     """Train rational model using the greedy Loewner framework
     Inputs:
     sampler: Callable to evaluate high-fidelity model. Note: model is
@@ -26,9 +25,8 @@ def trainSurrogate(sampler, z_min, z_max, estimator,
     y = samplerEff(sampler, z_sample)
     logger.info("0: sampled at z={}j".format(z_sample))
     size = len(y)
-    approx = barycentricFunction(np.array([z_sample]), np.ones(1),
-                                 np.expand_dims(y, 0))
-    L = np.expand_dims(.5j * (y.conj() - y) / z_sample, -1) # Loewner matrix
+    approx = barycentricFunction(np.array([z_sample]), np.ones(1), y)
+    L = .5j * (y.conj() - y) / z_sample # Loewner matrix
 
     # adaptivity loop
     n_memory = 0
@@ -59,19 +57,16 @@ def trainSurrogate(sampler, z_min, z_max, estimator,
         
         # update surrogate with new support points and values
         approx.supp = np.append(approx.supp, z_sample)
-        approx.vals = np.append(approx.vals, np.expand_dims(y, 0), axis = 0)
+        approx.vals = np.append(approx.vals, y, axis = -1)
 
         # update Loewner matrix
-        L = np.pad(L, [(0, size), (0, 1)])
-        for j, (k, s) in enumerate(zip(approx.supp, approx.vals)):
-            if j < approx.nsupp - 1: # right column
-                L[j * size : (j + 1) * size, -1] = (1j * (s.conj() - y)
-                                                       / (k + z_sample))
-        L[- size :, :] = (1j * (approx.vals[[-1]].conj() - approx.vals).T
-                                                / (z_sample + approx.supp))
+        L1 = 1j * (y.conj() - approx.vals) / (z_sample + approx.supp)
+        L = np.block([[L, L1[:, :-1].T.conj().reshape(-1, 1)], [L1]])
 
         # update surrogate with new barycentric coefficients
         approx.coeffs = np.linalg.svd(np.linalg.qr(L)[1])[2][-1].conj()
 
     logger.info("greedy loop terminated at {} samples".format(approx.nsupp))
+    if return_estimate:
+        return approx, (z_test, estimator.build_eta(z_test, approx))
     return approx

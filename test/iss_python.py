@@ -29,7 +29,8 @@ Smax, N_test, N_memory = 1000, 10000, 3
 
 for estimator in estimators:
     # train surrogate model
-    approx = trainSurrogate(sampler, z_min, z_max, estimator, Smax, N_test, N_memory)
+    approx, estimate = trainSurrogate(sampler, z_min, z_max, estimator, Smax,
+                                      N_test, N_memory, return_estimate = True)
 
     # predict and compute errors
     z_post = np.geomspace(z_min, z_max, 101)
@@ -37,24 +38,17 @@ for estimator in estimators:
     H_approx = approx(z_post)
     H_err = estimator.compute_error(H_approx, H_exact) + 1e-16
 
-    # update test set (for plotting the estimator only)
-    z_test = np.geomspace(z_min, z_max, N_test)
-    for z in approx.supp:
-        idx_bad = np.argmin(np.abs(z_test - z))
-        z_test = np.append(z_test[: idx_bad], z_test[idx_bad + 1 :])
-    eta = estimator.build_eta(z_test, approx)
-
     # make plots
     plt.figure()
     plt.loglog(z_post, np.abs(H_exact))
     plt.loglog(z_post, np.abs(H_approx), '--')
-    plt.loglog(approx.supp, np.abs(approx.vals), 'o')
+    plt.loglog(approx.supp, np.abs(approx.vals).T, 'o')
     plt.legend(["H{}".format(i) for i in range(H_exact.shape[1])])
     plt.xlabel("Im(z)"), plt.xlabel("|H|")
     plt.title(type(estimator).__name__)
     plt.figure()
     plt.loglog(z_post, H_err)
-    plt.loglog(z_test, eta, ":")
+    plt.loglog(*estimate, ":")
     plt.loglog([z_min, z_max], [estimator.tol] * 2, '--')
     plt.legend(["error", "estimator"])
     plt.xlabel("Im(z)"), plt.xlabel("relative error")

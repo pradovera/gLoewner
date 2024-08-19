@@ -7,8 +7,8 @@ def samplerEff(sampler, z):
     out = sampler(1j * z)
     if not isinstance(out, (np.ndarray)):
         out = np.array(out)
-    if out.ndim > 1:
-        out = out.flatten()
+    if out.ndim != 2 or out.shape[-1] != 1:
+        out = out.reshape(-1, 1)
     return out
 
 class estimator:
@@ -28,13 +28,9 @@ class estimator:
         # reciprocal of magnitude of surrogate denominator
         return 1 / np.abs(approx(z_test, only_den = True))
 
-    @abstractmethod
     def setup(self, *args, **kwargs): pass
-    @abstractmethod
     def pre_check(self, *args, **kwargs): pass
-    @abstractmethod
     def mid_setup(self, *args, **kwargs): pass
-    @abstractmethod
     def post_check(self, *args, **kwargs): pass
     @abstractmethod
     def build_eta(self, *args, **kwargs): pass
@@ -46,7 +42,7 @@ class estimatorLookAhead(estimator):
 
     def post_check(self, sample, approx, *args, **kwargs):
         # error at next sample point
-        self.error = self.compute_error(approx(self.z)[0], sample)
+        self.error = self.compute_error(approx(self.z)[0], sample[:, 0])
         return 1 * (self.error < self.tol)
 
     def build_eta(self, z_test, approx, *args, **kwargs):
@@ -75,8 +71,8 @@ class estimatorLookAheadBatch(estimator):
     def post_check(self, sample, approx, *args, **kwargs):
         # error at next sample point and at test points
         logger.info("computed {} extra test samples".format(self.N - 1))
-        samples = np.vstack([np.expand_dims(samplerEff(self.sampler, z), 0)
-                                                               for z in self.z])
+        samples = np.hstack([sample]
+                          + [samplerEff(self.sampler, z) for z in self.z[1 :]]).T
         error = self.compute_error(approx(self.z), samples)
         idx = np.argmax(error)
         self.error_z = self.z[idx]
@@ -87,7 +83,8 @@ class estimatorLookAheadBatch(estimator):
         # evaluate error estimator
         indicator = self.indicator(z_test, approx)
         self.mid_setup(z_test, np.argmax(indicator), indicator, approx)
-        self.post_check(None, approx)
+        sample = samplerEff(self.sampler, self.z[0])
+        self.post_check(sample, approx)
         return self.error * indicator / self.indicator(self.error_z, approx)
 
 class estimatorRandom(estimator):
@@ -102,9 +99,7 @@ class estimatorRandom(estimator):
         logger.info("computed {} extra test samples".format(self.N))
         self.z = 10 ** (np.log10(z_min) + (np.log10(z_max) - np.log10(z_min))
                                         * np.random.rand(self.N))
-        self.samples = np.vstack([np.expand_dims(samplerEff(self.sampler, z), 0)
-                                                               for z in self.z])
-        logger.info("computed {} extra test samples".format(self.N))
+        self.samples = np.hstack([samplerEff(self.sampler, z) for z in self.z]).T
         self.samples_norm = np.linalg.norm(self.samples, axis = 1)
 
     def pre_check(self, approx, *args, **kwargs):
