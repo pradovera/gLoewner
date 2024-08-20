@@ -15,17 +15,20 @@ tol = 1e-3; delta = 1e-8;
 
 % train surrogate model
 estimator_kind = "lookahead";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta);
+z_test = logspace(log10(z_min), log10(z_max), N_test);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_test, [1 N_test], estimator_kind, Smax, N_memory, is_system_selfadjoint, tol, delta);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 % train surrogate model
 estimator_kind = "lookaheadbatch";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta, 5);
+z_test = logspace(log10(z_min), log10(z_max), N_test);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_test, [1 N_test], estimator_kind, Smax, N_memory, is_system_selfadjoint, tol, delta, 5);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 % train surrogate model
 estimator_kind = "random";
-[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, tol, delta, 100, 42);
+z_test = logspace(log10(z_min), log10(z_max), N_test);
+[supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_test, [1 N_test], estimator_kind, Smax, N_memory, is_system_selfadjoint, tol, delta, 100, 42);
 postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta);
 
 function [] = postprocess(sampler, z_test, estimate, supp, coeffs, vals, estimator_kind, z_min, z_max, tol, delta)

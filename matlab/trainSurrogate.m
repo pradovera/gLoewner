@@ -1,12 +1,12 @@
-function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min, z_max, estimator_kind, Smax, N_test, N_memory, is_system_selfadjoint, varargin)
+function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_test, start_z_idx, estimator_kind, Smax, N_memory, is_system_selfadjoint, varargin)
 %TRAINSURROGATE   Train surrogate model.
-%   [SUPP, COEFFS, VALS, Z_TEST, ESTIMATE] = TRAINSURROGATE(SAMPLER, Z_MIN, Z_MAX, ESTIMATOR_KIND, SMAX, N_TEST, N_MEMORY, IS_SYSTEM_SELFADJOINT, VARARGIN)
-%       trains a surrogate model for high-fidelity function SAMPLER for
-%       Z_MIN <= z <= Z_MAX. Note: SAMPLER is evaluated at 1j*z. An
-%       estimator of kind ESTIMATOR_KIND is used to drive the adaptive
-%       sampling in the greedy Loewner framework, and VARARGIN contains
-%       arguments needed for its initialization. At most SMAX high-fidelity
-%       samples are taken. N_TEST candidate sample points are taken.
+%   [SUPP, COEFFS, VALS, Z_TEST, ESTIMATE] = TRAINSURROGATE(SAMPLER, Z_TEST, START_Z_IDX, ESTIMATOR_KIND, SMAX, N_MEMORY, IS_SYSTEM_SELFADJOINT, VARARGIN)
+%       trains a surrogate model for high-fidelity function SAMPLER(z).
+%       Note: SAMPLER is evaluated at 1j*z. An estimator of kind
+%       ESTIMATOR_KIND is used to drive the adaptive sampling in the greedy
+%       Loewner framework, and VARARGIN contains arguments needed for its
+%       initialization. At most SMAX high-fidelity samples are taken.
+%       Sample points are taken from the list of candidates Z_TEST.
 %       N_MEMORY memory terms are considered: the algorithm terminates
 %       successfully only if the estimator yields a "pass" at N_MEMORY
 %       successive iterations.
@@ -19,8 +19,13 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
     elseif strcmp(estimator_kind, "random")
         [batch_size, seed] = varargin{3:4};
     end
-    z_test = logspace(log10(z_min), log10(z_max), N_test).';
-    is_system_selfadjoint = (is_system_selfadjoint && imag(z_min) == 0 && imag(z_max) == 0);
+    z_test = z_test(:);
+    start_z_idx = start_z_idx(:);
+    if numel(start_z_idx) == 0; start_z_idx = 1; end
+    start_z_idx = unique(start_z_idx, "sorted");
+    start_z_idx = start_z_idx(end:-1:1);
+    
+    is_system_selfadjoint = (is_system_selfadjoint && all(imag(z_test) == 0,"all"));
 
     if strcmp(estimator_kind, "random") % initialize estimator
         rng(seed)
@@ -35,24 +40,43 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
         estimator_samples_norm = sum(abs(estimator_samples).^2, 2).^.5;
     end
 
-    % first sample
-    z_sample = z_test(1);
-    z_test(1) = []; % remove initial sample point from test set
-    y = samplerEff(sampler, z_sample);
-    fprintf("1: sampled at z=%ej\n", z_sample);
-    supp = z_sample; coeffs = 1; vals = y;
-    if is_system_selfadjoint
-        yC = conj(y);
-    else
-        yC = samplerEff(sampler, -z_sample);
-        fprintf("1: sampled at z=%ej\n", -z_sample);
+    % get initial samples
+    for j = 1:numel(start_z_idx)
+        i = start_z_idx(j);
+        [z_sample, z_test, y, yC] = getSample(sampler, z_test, i, j, is_system_selfadjoint);
+
+        if j == 1 % initial sample
+            size_y = numel(y);
+            if ~is_system_selfadjoint
+                valsC = inf(size_y, numel(start_z_idx));
+            end
+        end
+        if ~is_system_selfadjoint; valsC(:, j) = yC; end
+
+        if j == 1 % initialize rational function
+            supp = inf(numel(start_z_idx), 1);
+            vals = inf(size_y, numel(start_z_idx));
+        end
+        supp(j) = z_sample; vals(:, j) = y; % update rational function
+
+        if j == 1 % initialize Loewner matrix
+            L = inf(size_y * numel(start_z_idx), numel(start_z_idx));
+        end
+        % update Loewner matrix
+        L_new_oldandnew = 1j * bsxfun(@rdivide, (yC - vals(:, 1 : j)).', z_sample + supp(1 : j)).';
+        if is_system_selfadjoint
+            L_old_new = conj(L_new_oldandnew(:, 1 : end - 1));
+        else
+            L_old_new = 1j * bsxfun(@rdivide, (valsC - y).', z_sample + supp(1 : end - 1)).';
+        end
+        L(1 : (j - 1) * size_y, j) = L_old_new(:);
+        L((j - 1) * size_y + 1 : j * size_y, 1 : j) = L_new_oldandnew;
     end
-    L = .5j * (yC - y) / z_sample; % Loewner matrix
-    if ~is_system_selfadjoint; valsC = yC; end
+    coeffs = getBarycentricCoeffs(L);
 
     % adaptivity loop
     n_memory = 0;
-    for i = 1:Smax % max number of samples
+    for i = numel(supp):Smax % max number of samples
         if strcmp(estimator_kind, "random") % evaluate error at random points
             estimator_approx = barycentricEvaluate(estimator_z, supp, coeffs, vals);
             error = computeError(estimator_approx, estimator_samples, delta, estimator_samples_norm);
@@ -85,10 +109,7 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
         end
 
         % get next sample
-        z_sample = z_test(idx_sample);
-        z_test(idx_sample) = []; % remove sample point from test set
-        y = samplerEff(sampler, z_sample);
-        fprintf("%d: sampled at z=%ej\n", numel(supp) + 1, z_sample);
+        [z_sample, z_test, y, yC] = getSample(sampler, z_test, idx_sample, i, is_system_selfadjoint);
     
         if strcmp(estimator_kind, "lookaheadbatch") % get batch of test samples
             estimator_approx = barycentricEvaluate(estimator_z, supp, coeffs, vals);
@@ -115,25 +136,15 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
         supp = [supp; z_sample]; vals = [vals, y];
 
         % update Loewner matrix
+        L_new_oldandnew = 1j * bsxfun(@rdivide, (yC - vals).', z_sample + supp).';
         if is_system_selfadjoint
-            yC = conj(y);
+            L_old_new = conj(L_new_oldandnew(:, 1 : end - 1));
         else
-            yC = samplerEff(sampler, -z_sample);
-            fprintf("%d: sampled at z=%ej\n", numel(supp), -z_sample);
+            L_old_new = 1j * bsxfun(@rdivide, (valsC - y).', z_sample + supp(1 : end - 1)).';
         end
-        L1 = 1j * bsxfun(@rdivide, (yC - vals).', z_sample + supp).';
-        if is_system_selfadjoint
-            l1 = conj(L1(:, 1 : end-1));
-        else
-            l1 = 1j * bsxfun(@rdivide, (valsC - y).', z_sample + supp(1 : end - 1)).';
-            valsC = [valsC, yC];
-        end
-        L = [L l1(:); L1];
+        L = [L L_old_new(:); L_new_oldandnew];
 
-        % update surrogate with new barycentric coefficients
-        [~, R] = qr(L, 0);
-        [~, ~, V] = svd(R);
-        coeffs = V(:, end);
+        coeffs = getBarycentricCoeffs(L);
     end
     fprintf("greedy loop terminated at %d samples\n", numel(supp));
 
@@ -175,7 +186,26 @@ function [supp, coeffs, vals, z_test, estimate] = trainSurrogate(sampler, z_min,
     end
 end
 
-function [y] = samplerEff(sampler, z)
+function y = samplerEff(sampler, z)
     y = sampler(1j * z);
     y = y(:);
+end
+
+function [z_sample, z_test, y, yC] = getSample(sampler, z_test, idx, j, is_system_selfadjoint)
+    z_sample = z_test(idx);
+    z_test(idx) = []; % remove sample point from test set
+    y = samplerEff(sampler, z_sample);
+    fprintf("%d: sampled at z=%ej\n", j, z_sample);
+    if is_system_selfadjoint
+        yC = conj(y);
+    else
+        yC = samplerEff(sampler, -z_sample);
+        fprintf("%d: sampled at z=%ej\n", j, -z_sample);
+    end
+end
+
+function coeffs = getBarycentricCoeffs(L)
+    [~, R] = qr(L, 0);
+    [~, ~, V] = svd(R);
+    coeffs = V(:, end);
 end

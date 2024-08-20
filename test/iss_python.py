@@ -29,8 +29,9 @@ Smax, N_test, N_memory = 1000, 10000, 3
 
 for estimator in estimators:
     # train surrogate model
-    approx, estimate = trainSurrogate(sampler, z_min, z_max, estimator, Smax,
-                                      N_test, N_memory, return_estimate = True)
+    z_test = np.geomspace(z_min, z_max, N_test)
+    approx, estimate = trainSurrogate(sampler, z_test, [0, N_test - 1], estimator,
+                                      Smax, N_memory, return_estimate = True)
 
     # predict and compute errors
     z_post = np.geomspace(z_min, z_max, 101)
